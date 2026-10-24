@@ -27,7 +27,8 @@ func atenderCliente(file *os.File, conn net.Conn, mu *sync.Mutex) {
 		// Agarramos el candado: si otro cliente lo tiene, esperamos aca.
 		mu.Lock()
 
-		//
+		// Prefijo [dirección del cliente]. Va dentro del candado junto con el mensaje, porque son dos
+		// escrituras y no pueden separarse.
 		fmt.Fprint(file, "[", dire, "] ")
 
 		// Escribe en servidor.log
