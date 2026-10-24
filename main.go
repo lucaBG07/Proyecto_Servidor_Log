@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"sync"
 )
 
-func atenderCliente(file *os.File, conn net.Conn) {
+func atenderCliente(file *os.File, conn net.Conn, mu *sync.Mutex) {
 	// Cerramos el conn al terminar la funcion
 	defer conn.Close()
 
@@ -18,12 +19,22 @@ func atenderCliente(file *os.File, conn net.Conn) {
 	// el cliente se desconecta o hay un error. Por eso el for termina solo cuando el cliente se va.
 	for scan.Scan() {
 		linea := scan.Text()
+		dire := conn.RemoteAddr()
 
 		// Escribe en consola
 		fmt.Printf("%s\n", linea)
 
+		// Agarramos el candado: si otro cliente lo tiene, esperamos aca.
+		mu.Lock()
+
+		//
+		fmt.Fprint(file, "[", dire, "] ")
+
 		// Escribe en servidor.log
 		fmt.Fprintf(file, "%s\n", linea)
+
+		// Soltamos el candado para que pase el siguiente.
+		mu.Unlock()
 	}
 
 	// Verificamos que en el scan salio todo bien.
@@ -44,6 +55,9 @@ func main() {
 		fmt.Printf("[Error] al abrir el archivo: %v\n", err)
 		return
 	}
+
+	// Candado compartido por todos los clientes: solo una goroutine a la vez puede escribir en el archivo.
+	var mu sync.Mutex
 
 	// Cerramos el archivo al terminar la funcion
 	defer file.Close()
@@ -72,6 +86,6 @@ func main() {
 			continue
 		}
 
-		go atenderCliente(file, conn)
+		go atenderCliente(file, conn, &mu)
 	}
 }
