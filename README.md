@@ -10,6 +10,7 @@ Atiende a cada cliente en su propia goroutine, así que varios clientes pueden e
 Lee línea por línea lo que envía cada cliente (bufio.Scanner).
 Registra cada línea: la muestra por consola y la agrega al final de servidor.log, con la dirección del cliente como prefijo.
 Protege las escrituras con un sync.Mutex compartido, para que las líneas de distintos clientes no se mezclen.
+Devuelve la fecha y hora en la cual el cliente envio algo.
 
 Ejemplo de líneas en servidor.log:
 

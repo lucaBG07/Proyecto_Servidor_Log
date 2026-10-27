@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"time"
 )
 
 func atenderCliente(file *os.File, conn net.Conn, mu *sync.Mutex) {
@@ -20,16 +21,20 @@ func atenderCliente(file *os.File, conn net.Conn, mu *sync.Mutex) {
 	for scan.Scan() {
 		linea := scan.Text()
 		dire := conn.RemoteAddr()
+		ahora := time.Now().Format("2006-01-02 15:04:05")
 
-		// Escribe en consola
+		// Escribe en consola.
 		fmt.Printf("%s\n", linea)
 
 		// Agarramos el candado: si otro cliente lo tiene, esperamos aca.
 		mu.Lock()
 
+		// Agrega la fecha y hora al principio.
+		fmt.Fprint(file, ahora)
+
 		// Prefijo [dirección del cliente]. Va dentro del candado junto con el mensaje, porque son dos
 		// escrituras y no pueden separarse.
-		fmt.Fprint(file, "[", dire, "] ")
+		fmt.Fprint(file, " [", dire, "] ")
 
 		// Escribe en servidor.log
 		fmt.Fprintf(file, "%s\n", linea)
