@@ -2,14 +2,17 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"net"
 	"os"
+	"os/signal"
 	"sync"
 	"time"
 )
 
-func atenderCliente(file *os.File, conn net.Conn, mu *sync.Mutex) {
+func atenderCliente(file *os.File, conn net.Conn, mu *sync.Mutex, grupo *sync.WaitGroup) {
+	defer grupo.Done()
 	// Cerramos el conn al terminar la funcion
 	defer conn.Close()
 
@@ -81,10 +84,30 @@ func main() {
 	// Cerramos al terminar la funcion
 	defer listener.Close()
 
+	// Canal por donde el sistema operativo nos avisa de las señales.
+	// Capacidad 1 para que el aviso no se pierda si todavía no estamos esperando.
+	avisos := make(chan os.Signal, 1)
+
+	// Pedimos que, cuando llegue Ctrl + C, Go mande la señal por este canal en vez de matar el programa.
+	signal.Notify(avisos, os.Interrupt)
+
+	// Goroutine aparte que espera la señal, porque main está ocupado aceptando clientes.
+	go func() {
+		<-avisos // Se queda bloqueada acá hasta que llegue la señal.
+		fmt.Println("Señal recibida correctamente")
+		listener.Close() // Cerrar el listener hace que el Accept() bloqueado devuelva net.ErrClosed y main pueda salir del bucle.
+	}()
+
+	var grupo sync.WaitGroup
+
 	for {
 		// se queda bloqueado (esperando) hasta que un cliente se conecta, y cuando eso pasa
 		// devuelve una conexión (net.Conn) y un error.
 		conn, err := listener.Accept()
+
+		if errors.Is(err, net.ErrClosed) {
+			break
+		}
 
 		if err != nil {
 			fmt.Printf("[Error] falla al momento de conectar: %v\n", err)
@@ -92,6 +115,11 @@ func main() {
 			continue
 		}
 
-		go atenderCliente(file, conn, &mu)
+		grupo.Add(1)
+		go atenderCliente(file, conn, &mu, &grupo)
 	}
+
+	grupo.Wait()
+
+	fmt.Println("Servidor cerrado")
 }
