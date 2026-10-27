@@ -47,7 +47,13 @@ func atenderCliente(file *os.File, conn net.Conn, mu *sync.Mutex, grupo *sync.Wa
 	}
 
 	// Verificamos que en el scan salio todo bien.
-	if err := scan.Err(); err != nil {
+	// Si la conexión se cerró a propósito al apagar el servidor, no es un error.
+	err := scan.Err()
+	if errors.Is(err, net.ErrClosed) {
+		return
+	}
+
+	if err != nil {
 		fmt.Printf("Error al leer en el puerto: %v\n", err)
 	}
 }
@@ -84,6 +90,9 @@ func main() {
 	// Cerramos al terminar la funcion
 	defer listener.Close()
 
+	var conexiones []net.Conn
+	var muConex sync.Mutex
+
 	// Canal por donde el sistema operativo nos avisa de las señales.
 	// Capacidad 1 para que el aviso no se pierda si todavía no estamos esperando.
 	avisos := make(chan os.Signal, 1)
@@ -96,6 +105,12 @@ func main() {
 		<-avisos // Se queda bloqueada acá hasta que llegue la señal.
 		fmt.Println("Señal recibida correctamente")
 		listener.Close() // Cerrar el listener hace que el Accept() bloqueado devuelva net.ErrClosed y main pueda salir del bucle.
+
+		muConex.Lock()
+		for _, c := range conexiones {
+			c.Close()
+		}
+		muConex.Unlock()
 	}()
 
 	var grupo sync.WaitGroup
@@ -117,6 +132,10 @@ func main() {
 
 		grupo.Add(1)
 		go atenderCliente(file, conn, &mu, &grupo)
+
+		muConex.Lock()
+		conexiones = append(conexiones, conn)
+		muConex.Unlock()
 	}
 
 	grupo.Wait()
