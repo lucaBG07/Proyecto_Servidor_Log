@@ -7,9 +7,38 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"time"
 )
+
+// Los niveles que aceptamos
+var niveles = map[string]int{"DEBUG": 0, "INFO": 1, "WARN": 2, "ERROR": 3}
+
+// El nivel minimo para el filtro
+var nivelMinimo string = "WARN"
+
+func separarNivel(texto string) (string, string) {
+	// Cortar la linea en el primer espacio, en 2 partes como maximo
+	partes := strings.SplitN(texto, " ", 2)
+
+	// Si no salieron 2 partes, no hay nivel + mensaje
+	if len(partes) != 2 {
+		return "INFO", texto
+	}
+
+	// Pasamos el niivel a mayusculas
+	nivel := strings.ToUpper(partes[0])
+
+	_, existe := niveles[nivel]
+
+	if existe {
+		return nivel, partes[1]
+	}
+
+	// Si no esta, no era un nivel: devolvemos INFO y la linea completa
+	return "INFO", texto
+}
 
 func atenderCliente(file *os.File, conn net.Conn, mu *sync.Mutex, grupo *sync.WaitGroup) {
 	defer grupo.Done()
@@ -23,6 +52,13 @@ func atenderCliente(file *os.File, conn net.Conn, mu *sync.Mutex, grupo *sync.Wa
 	// el cliente se desconecta o hay un error. Por eso el for termina solo cuando el cliente se va.
 	for scan.Scan() {
 		linea := scan.Text()
+
+		nivel, mensaje := separarNivel(linea)
+
+		if niveles[nivel] < niveles[nivelMinimo] {
+			continue
+		}
+
 		dire := conn.RemoteAddr()
 		ahora := time.Now().Format("2006-01-02 15:04:05")
 
@@ -40,7 +76,8 @@ func atenderCliente(file *os.File, conn net.Conn, mu *sync.Mutex, grupo *sync.Wa
 		fmt.Fprint(file, " [", dire, "] ")
 
 		// Escribe en servidor.log
-		fmt.Fprintf(file, "%s\n", linea)
+		fmt.Fprint(file, "[", nivel, "] ")
+		fmt.Fprintf(file, "%s\n", mensaje)
 
 		// Soltamos el candado para que pase el siguiente.
 		mu.Unlock()
