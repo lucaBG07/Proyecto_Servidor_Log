@@ -16,7 +16,10 @@ import (
 var niveles = map[string]int{"DEBUG": 0, "INFO": 1, "WARN": 2, "ERROR": 3}
 
 // El nivel minimo para el filtro
-var nivelMinimo string = "WARN"
+// El filtro sirve para que, por ejemplo, si pongo de minimo "WARN" solo me devuelva
+// los mayores a ese, o sea, solo va a mostrar los WARN y ERROR
+// Si el minimo fuera "INFO" mostraria INFO, WARN y ERROR
+var nivelMinimo string = "INFO"
 
 func separarNivel(texto string) (string, string) {
 	// Cortar la linea en el primer espacio, en 2 partes como maximo
@@ -55,6 +58,8 @@ func atenderCliente(file *os.File, conn net.Conn, mu *sync.Mutex, grupo *sync.Wa
 
 		nivel, mensaje := separarNivel(linea)
 
+		// Compara el numero del nivel de la linea con el numero del minimo. Si es menor, el continue
+		// salta a la siguiente linea sin mostrarla ni guardarla.
 		if niveles[nivel] < niveles[nivelMinimo] {
 			continue
 		}
@@ -96,6 +101,21 @@ func atenderCliente(file *os.File, conn net.Conn, mu *sync.Mutex, grupo *sync.Wa
 }
 
 func main() {
+	// si el largo de os.Args es mayor que 1 (o sea, se escribio algo despues de main.go)
+	if len(os.Args) > 1 {
+		// Guardamos ese nivel que le pasamos para el filtro en nivelMinimo
+		// y lo ponemos en mayusculas
+		nivelMinimo = strings.ToUpper(os.Args[1])
+
+		// Preguntamos si el nivel ingresado existe
+		_, existe := niveles[nivelMinimo]
+		// Si no existe devuelve el Println
+		if !existe {
+			fmt.Println("Nivel invalido. Opciones: DEBUG, INFO, WARN, ERROR")
+			return
+		}
+	}
+
 	// Abrimos el archivo servidor.log y le pasamos:
 	// os.O_WRONLY: abrirlo solo para escribir.
 	// os.O_APPEND: escribir siempre al final, sin borrar lo que ya habia.
